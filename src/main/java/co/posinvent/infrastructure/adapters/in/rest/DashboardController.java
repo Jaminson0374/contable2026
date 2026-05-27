@@ -64,7 +64,7 @@ public class DashboardController {
               -
               COALESCE((
                 SELECT COALESCE(SUM(unit_cost * ABS(quantity)), 0)
-                FROM kardex
+                FROM inventory_movements
                 WHERE movement_type IN ('EXIT', 'PRODUCTION_CONSUMPTION')
                   AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)
               ), 0)

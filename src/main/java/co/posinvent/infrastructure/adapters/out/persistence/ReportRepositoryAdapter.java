@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -26,7 +27,7 @@ class ReportRepositoryAdapter implements ReportRepository {
 
     @Override
     public List<SalesByProductRow> salesByProduct(LocalDate from, LocalDate to, UUID warehouseId) {
-        String sql = """
+        var sql = new StringBuilder("""
             SELECT p.id as productId, p.name as productName, p.product_code as productCode,
                    pg.name as productGroup,
                    COALESCE(SUM(si.quantity), 0) as totalQuantity,
@@ -38,15 +39,25 @@ class ReportRepositoryAdapter implements ReportRepository {
             LEFT JOIN product_groups pg ON pg.id = p.group_id
             WHERE sd.type = 'INVOICE' AND sd.status = 'ISSUED'
               AND sd.created_at >= ? AND sd.created_at < ?
-              AND (?::uuid IS NULL OR sd.warehouse_id = ?::uuid)
-            GROUP BY p.id, p.name, p.product_code, pg.name
-            ORDER BY totalRevenue DESC
-            """;
+            """);
 
+        var params = new ArrayList<>();
         Timestamp tsFrom = from != null ? Timestamp.valueOf(from.atStartOfDay()) : Timestamp.valueOf("2000-01-01 00:00:00");
         Timestamp tsTo = to != null ? Timestamp.valueOf(to.plusDays(1).atStartOfDay()) : Timestamp.valueOf("2100-01-01 00:00:00");
+        params.add(tsFrom);
+        params.add(tsTo);
 
-        return jdbc.query(sql, (rs, rowNum) -> new SalesByProductRow(
+        if (warehouseId != null) {
+            sql.append("AND sd.warehouse_id = ?::uuid ");
+            params.add(warehouseId.toString());
+        }
+
+        sql.append("""
+            GROUP BY p.id, p.name, p.product_code, pg.name
+            ORDER BY totalRevenue DESC
+            """);
+
+        return jdbc.query(sql.toString(), (rs, rowNum) -> new SalesByProductRow(
                 UUID.fromString(rs.getString("productId")),
                 rs.getString("productName"),
                 rs.getString("productCode"),
@@ -54,7 +65,7 @@ class ReportRepositoryAdapter implements ReportRepository {
                 rs.getBigDecimal("totalQuantity"),
                 rs.getBigDecimal("totalRevenue"),
                 rs.getInt("transactionCount")
-        ), tsFrom, tsTo, warehouseId, warehouseId);
+        ), params.toArray());
     }
 
     @Override
@@ -91,6 +102,12 @@ class ReportRepositoryAdapter implements ReportRepository {
 
     @Override
     public List<ProfitabilityRow> profitability(LocalDate from, LocalDate to, UUID warehouseId) {
+        Timestamp tsFrom = from != null ? Timestamp.valueOf(from.atStartOfDay()) : Timestamp.valueOf("2000-01-01 00:00:00");
+        Timestamp tsTo = to != null ? Timestamp.valueOf(to.plusDays(1).atStartOfDay()) : Timestamp.valueOf("2100-01-01 00:00:00");
+
+        String revWh = warehouseId != null ? "AND sd.warehouse_id = ?::uuid " : "";
+        String cogsWh = warehouseId != null ? "AND im.warehouse_id = ?::uuid " : "";
+
         String sql = """
             SELECT p.id as productId, p.name as productName, p.product_code as productCode,
                    COALESCE(rev.totalRevenue, 0) as totalRevenue,
@@ -107,7 +124,7 @@ class ReportRepositoryAdapter implements ReportRepository {
                 JOIN sales_documents sd ON sd.id = si.document_id
                 WHERE sd.type = 'INVOICE' AND sd.status = 'ISSUED'
                   AND sd.created_at >= ? AND sd.created_at < ?
-                  AND (?::uuid IS NULL OR sd.warehouse_id = ?::uuid)
+                  $revWhClause$
                 GROUP BY si.product_id
             ) rev ON rev.product_id = p.id
             LEFT JOIN (
@@ -116,16 +133,23 @@ class ReportRepositoryAdapter implements ReportRepository {
                 FROM inventory_movements im
                 WHERE im.movement_type IN ('EXIT', 'PRODUCTION_CONSUMPTION')
                   AND im.created_at >= ? AND im.created_at < ?
-                  AND (?::uuid IS NULL OR im.warehouse_id = ?::uuid)
+                  $cogsWhClause$
                 GROUP BY im.product_id
             ) cogs ON cogs.product_id = p.id
             WHERE (rev.totalRevenue IS NOT NULL AND rev.totalRevenue > 0)
                OR (cogs.totalCogs IS NOT NULL AND cogs.totalCogs > 0)
             ORDER BY grossMargin DESC
-            """;
+            """
+            .replace("$revWhClause$", revWh)
+            .replace("$cogsWhClause$", cogsWh);
 
-        Timestamp tsFrom = from != null ? Timestamp.valueOf(from.atStartOfDay()) : Timestamp.valueOf("2000-01-01 00:00:00");
-        Timestamp tsTo = to != null ? Timestamp.valueOf(to.plusDays(1).atStartOfDay()) : Timestamp.valueOf("2100-01-01 00:00:00");
+        var params = new ArrayList<>();
+        params.add(tsFrom);
+        params.add(tsTo);
+        if (warehouseId != null) params.add(warehouseId.toString());
+        params.add(tsFrom);
+        params.add(tsTo);
+        if (warehouseId != null) params.add(warehouseId.toString());
 
         return jdbc.query(sql, (rs, rowNum) -> new ProfitabilityRow(
                 UUID.fromString(rs.getString("productId")),
@@ -135,7 +159,7 @@ class ReportRepositoryAdapter implements ReportRepository {
                 rs.getBigDecimal("totalCogs"),
                 rs.getBigDecimal("grossMargin"),
                 rs.getBigDecimal("marginPercent")
-        ), tsFrom, tsTo, warehouseId, warehouseId, tsFrom, tsTo, warehouseId, warehouseId);
+        ), params.toArray());
     }
 
     @Override

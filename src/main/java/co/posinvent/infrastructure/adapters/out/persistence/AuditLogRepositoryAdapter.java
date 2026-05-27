@@ -31,7 +31,31 @@ class AuditLogRepositoryAdapter implements AuditLogRepository {
     public Page<AuditLog> findFiltered(
             String entityType, UUID userId, String action,
             OffsetDateTime from, OffsetDateTime to, Pageable pageable) {
-        return jpa.findFiltered(entityType, userId, action, from, to, pageable)
-                .map(mapper::toDomain);
+
+        boolean hasEntity = entityType != null;
+        boolean hasUser = userId != null;
+        boolean hasAction = action != null;
+        boolean hasDates = from != null && to != null;
+
+        Page<AuditLogEntity> result;
+
+        if (hasEntity && hasUser && hasAction && hasDates) {
+            result = jpa.findByEntityTypeAndUserIdAndActionAndCreatedAtBetweenOrderByCreatedAtDesc(
+                    entityType, userId, action, from, to, pageable);
+        } else if (hasEntity && hasUser && hasDates) {
+            result = jpa.findByEntityTypeAndUserIdAndCreatedAtBetweenOrderByCreatedAtDesc(
+                    entityType, userId, from, to, pageable);
+        } else if (hasEntity && hasDates) {
+            result = jpa.findByEntityTypeAndCreatedAtBetweenOrderByCreatedAtDesc(
+                    entityType, from, to, pageable);
+        } else if (hasDates) {
+            result = jpa.findByCreatedAtBetweenOrderByCreatedAtDesc(from, to, pageable);
+        } else if (hasEntity) {
+            result = jpa.findByEntityTypeOrderByCreatedAtDesc(entityType, pageable);
+        } else {
+            result = jpa.findAllByOrderByCreatedAtDesc(pageable);
+        }
+
+        return result.map(mapper::toDomain);
     }
 }
