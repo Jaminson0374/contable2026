@@ -36,7 +36,7 @@ class ReportRepositoryAdapter implements ReportRepository {
             FROM sales_documents sd
             JOIN sales_items si ON si.document_id = sd.id
             JOIN products p ON p.id = si.product_id
-            LEFT JOIN product_groups pg ON pg.id = p.group_id
+            LEFT JOIN product_groups pg ON pg.id = p.product_group_id
             WHERE sd.type = 'INVOICE' AND sd.status = 'ISSUED'
               AND sd.created_at >= ? AND sd.created_at < ?
             """);
