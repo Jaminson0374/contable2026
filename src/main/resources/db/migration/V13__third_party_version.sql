@@ -1,0 +1,1 @@
+ALTER TABLE third_parties ADD COLUMN version INTEGER NOT NULL DEFAULT 0;

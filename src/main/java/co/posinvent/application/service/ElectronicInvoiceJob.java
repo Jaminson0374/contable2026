@@ -1,0 +1,209 @@
+package co.posinvent.application.service;
+
+import co.posinvent.domain.model.*;
+import co.posinvent.domain.repository.ElectronicInvoiceProvider;
+import co.posinvent.domain.repository.ElectronicInvoiceRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
+
+import java.time.OffsetDateTime;
+import java.util.Map;
+
+@Service
+public class ElectronicInvoiceJob {
+
+    private static final Logger log = LoggerFactory.getLogger(ElectronicInvoiceJob.class);
+
+    private final ElectronicInvoiceRepository repository;
+    private final ElectronicInvoiceProvider provider;
+
+    public ElectronicInvoiceJob(
+            ElectronicInvoiceRepository repository,
+            ElectronicInvoiceProvider provider
+    ) {
+        this.repository = repository;
+        this.provider = provider;
+    }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onInvoiceIssued(InvoiceIssuedEvent event) {
+        log.info("Processing DIAN electronic invoice for sales document: {}", event.salesDocumentId());
+        processInvoice(event.salesDocumentId(), event.invoiceNumber(), null);
+    }
+
+    @Async
+    public void processInvoice(java.util.UUID salesDocumentId, String documentNumber, java.util.UUID sourceDocumentId) {
+        try {
+            // Create electronic invoice record
+            var invoice = repository.save(new ElectronicInvoice(
+                    null,
+                    salesDocumentId,
+                    sourceDocumentId,
+                    null,
+                    null,
+                    null,
+                    ElectronicInvoiceStatus.PENDING_SEND,
+                    null,
+                    null,
+                    null
+            ));
+
+            // Enqueue to sync queue
+            repository.saveSyncQueueItem(new DianSyncQueueItem(
+                    null,
+                    invoice.id(),
+                    0,
+                    5,
+                    OffsetDateTime.now(),
+                    null,
+                    SyncStatus.PENDING,
+                    null
+            ));
+
+            // Attempt to send immediately
+            try {
+                // TODO: Build real ElectronicInvoiceRequest from sales document data
+                // For now, use a minimal placeholder
+                var request = new ElectronicInvoiceRequest(
+                        documentNumber,
+                        java.time.LocalDate.now().toString(),
+                        "MOCK-NIT",
+                        "Mock Client",
+                        java.util.List.of(),
+                        Map.of(),
+                        java.math.BigDecimal.ZERO,
+                        null
+                );
+
+                var response = provider.sendInvoice(request);
+
+                // Update electronic invoice with results
+                repository.save(new ElectronicInvoice(
+                        invoice.id(),
+                        invoice.salesDocumentId(),
+                        invoice.sourceDocumentId(),
+                        response.cufe(),
+                        response.qrCode(),
+                        Map.of("status", response.status(), "reference", response.providerReference()),
+                        "ACCEPTED_BY_DIAN".equals(response.status())
+                                ? ElectronicInvoiceStatus.ACCEPTED_BY_DIAN
+                                : ElectronicInvoiceStatus.SENT,
+                        OffsetDateTime.now(),
+                        OffsetDateTime.now(),
+                        invoice.createdAt()
+                ));
+
+                // Mark sync queue item as completed
+                var syncItem = repository.findSyncQueueItemByInvoiceId(invoice.id());
+                syncItem.ifPresent(item -> {
+                    repository.updateSyncQueueItem(new DianSyncQueueItem(
+                            item.id(), item.electronicInvoiceId(),
+                            item.attemptCount() + 1, item.maxAttempts(),
+                            item.nextAttemptAt(), null,
+                            SyncStatus.COMPLETED, item.createdAt()
+                    ));
+                });
+
+                log.info("DIAN electronic invoice {} sent successfully. CUFE: {}", invoice.id(), response.cufe());
+            } catch (Exception e) {
+                log.error("Failed to send DIAN invoice {}: {}", invoice.id(), e.getMessage());
+                handleSendFailure(invoice.id(), e.getMessage());
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to process DIAN invoice for sales document {}: {}", salesDocumentId, e.getMessage());
+        }
+    }
+
+    @Scheduled(fixedDelay = 30000)
+    public void processQueue() {
+        var pendingItems = repository.findPendingSyncItems();
+        for (var item : pendingItems) {
+            if (item.attemptCount() >= item.maxAttempts()) {
+                repository.updateSyncQueueItem(new DianSyncQueueItem(
+                        item.id(), item.electronicInvoiceId(),
+                        item.attemptCount(), item.maxAttempts(),
+                        item.nextAttemptAt(), item.lastError(),
+                        SyncStatus.FAILED, item.createdAt()
+                ));
+                continue;
+            }
+
+            repository.updateSyncQueueItem(new DianSyncQueueItem(
+                    item.id(), item.electronicInvoiceId(),
+                    item.attemptCount(), item.maxAttempts(),
+                    item.nextAttemptAt(), item.lastError(),
+                    SyncStatus.IN_PROGRESS, item.createdAt()
+            ));
+
+            try {
+                var invoice = repository.findById(item.electronicInvoiceId());
+                if (invoice.isPresent() && invoice.get().cufe() != null) {
+                    var response = provider.checkStatus(invoice.get().cufe());
+                    var newStatus = "ACCEPTED_BY_DIAN".equals(response.status())
+                            ? ElectronicInvoiceStatus.ACCEPTED_BY_DIAN
+                            : ElectronicInvoiceStatus.REJECTED_BY_DIAN;
+
+                    repository.save(new ElectronicInvoice(
+                            invoice.get().id(), invoice.get().salesDocumentId(),
+                            invoice.get().sourceDocumentId(), invoice.get().cufe(),
+                            invoice.get().qrCode(), invoice.get().providerResponse(),
+                            newStatus, invoice.get().sentAt(),
+                            OffsetDateTime.now(), invoice.get().createdAt()
+                    ));
+
+                    repository.updateSyncQueueItem(new DianSyncQueueItem(
+                            item.id(), item.electronicInvoiceId(),
+                            item.attemptCount() + 1, item.maxAttempts(),
+                            item.nextAttemptAt(), null,
+                            SyncStatus.COMPLETED, item.createdAt()
+                    ));
+                } else {
+                    // Re-send
+                    var request = new ElectronicInvoiceRequest(
+                            "UNKNOWN", java.time.LocalDate.now().toString(),
+                            "MOCK-NIT", "Mock Client",
+                            java.util.List.of(), Map.of(),
+                            java.math.BigDecimal.ZERO, null
+                    );
+                    var response = provider.sendInvoice(request);
+
+                    repository.save(new ElectronicInvoice(
+                            invoice.get().id(), invoice.get().salesDocumentId(),
+                            invoice.get().sourceDocumentId(), response.cufe(),
+                            response.qrCode(),
+                            Map.of("status", response.status(), "reference", response.providerReference()),
+                            ElectronicInvoiceStatus.SENT, OffsetDateTime.now(),
+                            null, invoice.get().createdAt()
+                    ));
+                }
+            } catch (Exception e) {
+                log.error("Queue processing failed for item {}: {}", item.id(), e.getMessage());
+                handleSendFailure(item.electronicInvoiceId(), e.getMessage());
+            }
+        }
+    }
+
+    private void handleSendFailure(java.util.UUID invoiceId, String errorMessage) {
+        var syncItem = repository.findSyncQueueItemByInvoiceId(invoiceId);
+        syncItem.ifPresent(item -> {
+            var newAttemptCount = item.attemptCount() + 1;
+            var delaySeconds = (long) Math.pow(2, newAttemptCount - 1) * 30; // 30s, 60s, 120s, 240s, 480s
+            var nextAttempt = OffsetDateTime.now().plusSeconds(delaySeconds);
+            var newStatus = newAttemptCount >= item.maxAttempts() ? SyncStatus.FAILED : SyncStatus.PENDING;
+
+            repository.updateSyncQueueItem(new DianSyncQueueItem(
+                    item.id(), item.electronicInvoiceId(),
+                    newAttemptCount, item.maxAttempts(),
+                    nextAttempt, errorMessage,
+                    newStatus, item.createdAt()
+            ));
+        });
+    }
+}

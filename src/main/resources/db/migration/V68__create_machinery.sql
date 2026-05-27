@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS machinery (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(200) NOT NULL,
+    machinery_type VARCHAR(50) NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'OPERATIONAL',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

@@ -1,0 +1,1 @@
+ALTER TABLE third_parties ADD COLUMN email VARCHAR(200);

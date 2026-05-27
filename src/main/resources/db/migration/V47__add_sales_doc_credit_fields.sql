@@ -1,0 +1,5 @@
+ALTER TABLE sales_documents
+    ADD COLUMN IF NOT EXISTS due_date DATE;
+
+ALTER TABLE sales_documents
+    ADD COLUMN IF NOT EXISTS is_credit_sale BOOLEAN NOT NULL DEFAULT FALSE;
