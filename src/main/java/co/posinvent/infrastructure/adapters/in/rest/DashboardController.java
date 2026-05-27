@@ -42,13 +42,11 @@ public class DashboardController {
 
         Integer lowStockCount = jdbc.queryForObject(
             """
-            SELECT COUNT(DISTINCT pw.product_id)
-            FROM product_warehouses pw
-            JOIN inventory_stock s
-              ON s.product_id = pw.product_id
-             AND s.warehouse_id = pw.warehouse_id
-            WHERE s.current_quantity - s.committed_quantity <= pw.min_stock
-              AND pw.min_stock > 0
+            SELECT COUNT(DISTINCT p.id)
+            FROM products p
+            JOIN inventory_stock s ON s.product_id = p.id
+            WHERE s.current_quantity - s.committed_quantity <= p.min_stock
+              AND p.min_stock > 0
             """,
             Integer.class
         );

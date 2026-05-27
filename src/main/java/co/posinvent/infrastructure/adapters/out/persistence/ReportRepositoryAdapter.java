@@ -54,8 +54,7 @@ class ReportRepositoryAdapter implements ReportRepository {
                 rs.getBigDecimal("totalQuantity"),
                 rs.getBigDecimal("totalRevenue"),
                 rs.getInt("transactionCount")
-        ), tsFrom, tsTo, warehouseId != null ? warehouseId.toString() : null,
-                warehouseId != null ? warehouseId.toString() : null);
+        ), tsFrom, tsTo, warehouseId, warehouseId);
     }
 
     @Override
@@ -127,7 +126,6 @@ class ReportRepositoryAdapter implements ReportRepository {
 
         Timestamp tsFrom = from != null ? Timestamp.valueOf(from.atStartOfDay()) : Timestamp.valueOf("2000-01-01 00:00:00");
         Timestamp tsTo = to != null ? Timestamp.valueOf(to.plusDays(1).atStartOfDay()) : Timestamp.valueOf("2100-01-01 00:00:00");
-        String wh = warehouseId != null ? warehouseId.toString() : null;
 
         return jdbc.query(sql, (rs, rowNum) -> new ProfitabilityRow(
                 UUID.fromString(rs.getString("productId")),
@@ -137,7 +135,7 @@ class ReportRepositoryAdapter implements ReportRepository {
                 rs.getBigDecimal("totalCogs"),
                 rs.getBigDecimal("grossMargin"),
                 rs.getBigDecimal("marginPercent")
-        ), tsFrom, tsTo, wh, wh, tsFrom, tsTo, wh, wh);
+        ), tsFrom, tsTo, warehouseId, warehouseId, tsFrom, tsTo, warehouseId, warehouseId);
     }
 
     @Override

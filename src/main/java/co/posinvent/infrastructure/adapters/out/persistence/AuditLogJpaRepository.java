@@ -11,15 +11,24 @@ import java.util.UUID;
 
 public interface AuditLogJpaRepository extends JpaRepository<AuditLogEntity, UUID> {
 
-    @Query("""
-        SELECT a FROM AuditLogEntity a
-        WHERE (:entityType IS NULL OR a.entityType = :entityType)
-          AND (:userId IS NULL OR a.userId = :userId)
-          AND (:action IS NULL OR a.action = :action)
-          AND (:from IS NULL OR a.createdAt >= :from)
-          AND (:to   IS NULL OR a.createdAt <= :to)
-        ORDER BY a.createdAt DESC
-    """)
+    @Query(value = """
+        SELECT * FROM audit_log a
+        WHERE (CAST(:entityType AS text) IS NULL OR a.entity_type = CAST(:entityType AS text))
+          AND (CAST(:userId AS uuid) IS NULL OR a.user_id = CAST(:userId AS uuid))
+          AND (CAST(:action AS text) IS NULL OR a.action = CAST(:action AS text))
+          AND (CAST(:from AS timestamptz) IS NULL OR a.created_at >= CAST(:from AS timestamptz))
+          AND (CAST(:to AS timestamptz) IS NULL OR a.created_at <= CAST(:to AS timestamptz))
+        ORDER BY a.created_at DESC
+        """,
+        countQuery = """
+        SELECT COUNT(*) FROM audit_log a
+        WHERE (CAST(:entityType AS text) IS NULL OR a.entity_type = CAST(:entityType AS text))
+          AND (CAST(:userId AS uuid) IS NULL OR a.user_id = CAST(:userId AS uuid))
+          AND (CAST(:action AS text) IS NULL OR a.action = CAST(:action AS text))
+          AND (CAST(:from AS timestamptz) IS NULL OR a.created_at >= CAST(:from AS timestamptz))
+          AND (CAST(:to AS timestamptz) IS NULL OR a.created_at <= CAST(:to AS timestamptz))
+        """,
+        nativeQuery = true)
     Page<AuditLogEntity> findFiltered(
         @Param("entityType") String entityType,
         @Param("userId") UUID userId,
