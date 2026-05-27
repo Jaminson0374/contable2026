@@ -10,7 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,8 +27,8 @@ public class ReportController {
     @GetMapping("/sales-by-product")
     @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
     public ResponseEntity<List<SalesByProductRow>> salesByProduct(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) UUID warehouseId
     ) {
         return ResponseEntity.ok(reportUseCase.salesByProduct(from, to, warehouseId));
@@ -37,8 +37,8 @@ public class ReportController {
     @GetMapping("/sales-by-period")
     @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
     public ResponseEntity<List<SalesByPeriodRow>> salesByPeriod(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(defaultValue = "DAILY") String granularity
     ) {
         return ResponseEntity.ok(reportUseCase.salesByPeriod(from, to, granularity));
@@ -47,8 +47,8 @@ public class ReportController {
     @GetMapping("/profitability")
     @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
     public ResponseEntity<List<ProfitabilityRow>> profitability(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) UUID warehouseId
     ) {
         return ResponseEntity.ok(reportUseCase.profitability(from, to, warehouseId));
@@ -57,8 +57,8 @@ public class ReportController {
     @GetMapping("/income-statement")
     @PreAuthorize("hasAnyRole('ADMIN','CONTADOR')")
     public ResponseEntity<IncomeStatementRow> incomeStatement(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
         return ResponseEntity.ok(reportUseCase.incomeStatement(from, to));
     }

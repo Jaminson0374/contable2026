@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -24,7 +25,7 @@ class ReportRepositoryAdapter implements ReportRepository {
     }
 
     @Override
-    public List<SalesByProductRow> salesByProduct(LocalDateTime from, LocalDateTime to, UUID warehouseId) {
+    public List<SalesByProductRow> salesByProduct(LocalDate from, LocalDate to, UUID warehouseId) {
         String sql = """
             SELECT p.id as productId, p.name as productName, p.product_code as productCode,
                    pg.name as productGroup,
@@ -42,8 +43,8 @@ class ReportRepositoryAdapter implements ReportRepository {
             ORDER BY totalRevenue DESC
             """;
 
-        Timestamp tsFrom = from != null ? Timestamp.valueOf(from) : Timestamp.valueOf("2000-01-01 00:00:00");
-        Timestamp tsTo = to != null ? Timestamp.valueOf(to) : Timestamp.valueOf("2100-01-01 00:00:00");
+        Timestamp tsFrom = from != null ? Timestamp.valueOf(from.atStartOfDay()) : Timestamp.valueOf("2000-01-01 00:00:00");
+        Timestamp tsTo = to != null ? Timestamp.valueOf(to.plusDays(1).atStartOfDay()) : Timestamp.valueOf("2100-01-01 00:00:00");
 
         return jdbc.query(sql, (rs, rowNum) -> new SalesByProductRow(
                 UUID.fromString(rs.getString("productId")),
@@ -58,7 +59,7 @@ class ReportRepositoryAdapter implements ReportRepository {
     }
 
     @Override
-    public List<SalesByPeriodRow> salesByPeriod(LocalDateTime from, LocalDateTime to, String granularity) {
+    public List<SalesByPeriodRow> salesByPeriod(LocalDate from, LocalDate to, String granularity) {
         String truncUnit = switch (granularity != null ? granularity : "DAILY") {
             case "DAILY" -> "day";
             case "WEEKLY" -> "week";
@@ -77,8 +78,8 @@ class ReportRepositoryAdapter implements ReportRepository {
                    + "GROUP BY DATE_TRUNC('" + truncUnit + "', sd.created_at) "
                    + "ORDER BY period";
 
-        Timestamp tsFrom = from != null ? Timestamp.valueOf(from) : Timestamp.valueOf("2000-01-01 00:00:00");
-        Timestamp tsTo = to != null ? Timestamp.valueOf(to) : Timestamp.valueOf("2100-01-01 00:00:00");
+        Timestamp tsFrom = from != null ? Timestamp.valueOf(from.atStartOfDay()) : Timestamp.valueOf("2000-01-01 00:00:00");
+        Timestamp tsTo = to != null ? Timestamp.valueOf(to.plusDays(1).atStartOfDay()) : Timestamp.valueOf("2100-01-01 00:00:00");
 
         return jdbc.query(sql, (rs, rowNum) -> new SalesByPeriodRow(
                 rs.getString("period"),
@@ -90,7 +91,7 @@ class ReportRepositoryAdapter implements ReportRepository {
     }
 
     @Override
-    public List<ProfitabilityRow> profitability(LocalDateTime from, LocalDateTime to, UUID warehouseId) {
+    public List<ProfitabilityRow> profitability(LocalDate from, LocalDate to, UUID warehouseId) {
         String sql = """
             SELECT p.id as productId, p.name as productName, p.product_code as productCode,
                    COALESCE(rev.totalRevenue, 0) as totalRevenue,
@@ -124,8 +125,8 @@ class ReportRepositoryAdapter implements ReportRepository {
             ORDER BY grossMargin DESC
             """;
 
-        Timestamp tsFrom = from != null ? Timestamp.valueOf(from) : Timestamp.valueOf("2000-01-01 00:00:00");
-        Timestamp tsTo = to != null ? Timestamp.valueOf(to) : Timestamp.valueOf("2100-01-01 00:00:00");
+        Timestamp tsFrom = from != null ? Timestamp.valueOf(from.atStartOfDay()) : Timestamp.valueOf("2000-01-01 00:00:00");
+        Timestamp tsTo = to != null ? Timestamp.valueOf(to.plusDays(1).atStartOfDay()) : Timestamp.valueOf("2100-01-01 00:00:00");
         String wh = warehouseId != null ? warehouseId.toString() : null;
 
         return jdbc.query(sql, (rs, rowNum) -> new ProfitabilityRow(
@@ -140,9 +141,9 @@ class ReportRepositoryAdapter implements ReportRepository {
     }
 
     @Override
-    public IncomeStatementRow incomeStatement(LocalDateTime from, LocalDateTime to) {
-        Timestamp tsFrom = from != null ? Timestamp.valueOf(from) : Timestamp.valueOf("2000-01-01 00:00:00");
-        Timestamp tsTo = to != null ? Timestamp.valueOf(to) : Timestamp.valueOf("2100-01-01 00:00:00");
+    public IncomeStatementRow incomeStatement(LocalDate from, LocalDate to) {
+        Timestamp tsFrom = from != null ? Timestamp.valueOf(from.atStartOfDay()) : Timestamp.valueOf("2000-01-01 00:00:00");
+        Timestamp tsTo = to != null ? Timestamp.valueOf(to.plusDays(1).atStartOfDay()) : Timestamp.valueOf("2100-01-01 00:00:00");
 
         // Revenue: INVOICE - CREDIT_NOTE
         var revenue = jdbc.queryForObject("""

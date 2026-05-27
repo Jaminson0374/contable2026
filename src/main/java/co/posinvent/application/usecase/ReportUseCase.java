@@ -8,7 +8,7 @@ import co.posinvent.domain.repository.ReportRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -22,14 +22,14 @@ public class ReportUseCase {
         this.reportRepo = reportRepo;
     }
 
-    public List<SalesByProductRow> salesByProduct(LocalDateTime from, LocalDateTime to, UUID warehouseId) {
+    public List<SalesByProductRow> salesByProduct(LocalDate from, LocalDate to, UUID warehouseId) {
         if (from != null && to != null && !from.isBefore(to)) {
             throw new IllegalArgumentException("from debe ser anterior a to");
         }
         return reportRepo.salesByProduct(from, to, warehouseId);
     }
 
-    public List<SalesByPeriodRow> salesByPeriod(LocalDateTime from, LocalDateTime to, String granularity) {
+    public List<SalesByPeriodRow> salesByPeriod(LocalDate from, LocalDate to, String granularity) {
         if (from != null && to != null && !from.isBefore(to)) {
             throw new IllegalArgumentException("from debe ser anterior a to");
         }
@@ -39,11 +39,11 @@ public class ReportUseCase {
         return reportRepo.salesByPeriod(from, to, granularity);
     }
 
-    public List<ProfitabilityRow> profitability(LocalDateTime from, LocalDateTime to, UUID warehouseId) {
+    public List<ProfitabilityRow> profitability(LocalDate from, LocalDate to, UUID warehouseId) {
         return reportRepo.profitability(from, to, warehouseId);
     }
 
-    public IncomeStatementRow incomeStatement(LocalDateTime from, LocalDateTime to) {
+    public IncomeStatementRow incomeStatement(LocalDate from, LocalDate to) {
         return reportRepo.incomeStatement(from, to);
     }
 }
